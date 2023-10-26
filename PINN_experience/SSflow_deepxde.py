@@ -112,5 +112,5 @@ model.compile("L-BFGS")
 losshistory, train_state = model.train()
 
 # X = spatial_domain.random_points(100000)
-
+dde.utils.external.save_best_state(train_state)
 dde.saveplot(losshistory, train_state, issave=True, isplot=True)
