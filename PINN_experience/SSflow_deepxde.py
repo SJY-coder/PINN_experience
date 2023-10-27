@@ -54,7 +54,7 @@ def euler_equation(coords, state):
 
 
 rectangle = dde.geometry.Rectangle(xmin=[-0.75, -1.3], xmax=[0.75, 1.3])
-triangle = dde.geometry.Triangle([-0.5, 0], [0.75, 0.27], [0.75, -0.27])
+triangle = dde.geometry.Triangle([0.0, 0], [0.75, 0.27], [0.75, -0.27])
 spatial_domain = dde.geometry.csg.CSGDifference(rectangle, triangle)
 
 
@@ -83,8 +83,8 @@ p_inlet_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: p_inf, inlet, compon
 u_inlet_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: u_inf, inlet, component=2)
 v_inlet_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: v_inf, inlet, component=3)
 
-u_non_slip_bc = dde.icbc.DirichletBC(triangle, lambda x: 0, non_slip, component=2)
-v_non_slip_bc = dde.icbc.DirichletBC(triangle, lambda x: 0, non_slip, component=3)
+u_non_slip_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: 0, non_slip, component=2)
+v_non_slip_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: 0, non_slip, component=3)
 
 # p_outlet_bc = dde.icbc.DirichletBC(spatial_domain, lambda x: 0, outlet, component=1)
 data = dde.data.PDE(
@@ -100,17 +100,39 @@ data = dde.data.PDE(
     ],
     num_domain=2601,
     num_boundary=400,
-    num_test=100000,
+    #num_test=100000,
 )
 net = dde.nn.FNN([2] + 4 * [50] + [4], "tanh", "Glorot normal")
+# checker = dde.callbacks.ModelCheckpoint(
+#     "model/model.ckpt", save_better_only=True, period=1000
+# )
 
 model = dde.Model(data, net)
 
 model.compile("adam", lr=1e-3)
-model.train(iterations=30000)
+model.train(iterations=10000)
 model.compile("L-BFGS")
-losshistory, train_state = model.train()
+#losshistory, train_state = model.train(model_save_path="model/model.ckpt")
+model.train()
+
+X = spatial_domain.random_points(100000)
+err = 1
+while err > 0.005:
+    f = model.predict(X, operator=euler_equation)
+    err_eq = np.absolute(f)
+    err = np.mean(err_eq)
+    print("Mean residual: %.3e" % (err))
+
+    x_id = np.argmax(err_eq)
+    print("Adding new point:", X[x_id], "\n")
+    data.add_anchors(X[x_id])
+    early_stopping = dde.callbacks.EarlyStopping(min_delta=1e-4, patience=2000)
+    model.compile("adam", lr=1e-3)
+    model.train(iterations=10000, disregard_previous_best=True, callbacks=[early_stopping])
+    model.compile("L-BFGS")
+    losshistory, train_state = model.train()
 
 # X = spatial_domain.random_points(100000)
-dde.utils.external.save_best_state(train_state)
+dde.utils.save_best_state(train_state,"best_train.dat","best_test.dat")
 dde.saveplot(losshistory, train_state, issave=True, isplot=True)
+model.save(save_path = "model/adaptive_resmapling_model.ckpt")
