@@ -100,7 +100,7 @@ data = dde.data.PDE(
     ],
     num_domain=2601,
     num_boundary=400,
-    # num_test=100000,
+    num_test=100000,
 )
 net = dde.nn.FNN([2] + 4 * [50] + [4], "tanh", "Glorot normal")
 # checker = dde.callbacks.ModelCheckpoint(
@@ -116,35 +116,51 @@ model.compile("L-BFGS")
 model.train()
 
 X = spatial_domain.random_points(100000)
-err = 1
-while err > 0.005:
+total_err = 1
+add_iter = 0
+while total_err > 0.01 :
+    add_iter = add_iter + 1
     f = model.predict(X, operator=euler_equation)
-    err_eq1 = np.absolute(f[0])  # find each loss equation for euler equations
-    err_eq2 = np.absolute(f[1])
-    err_eq3 = np.absolute(f[2])
-    err_eq4 = np.absolute(f[3])
-    err1 = np.mean(err_eq1)
-    err2 = np.mean(err_eq2)
-    err3 = np.mean(err_eq3)
-    err4 = np.mean(err_eq4)
-    # print("Mean residual: %.3e" % (err))
-
-    x_id1 = np.argmax(err_eq1)
-    x_id2 = np.argmax(err_eq2)
-    x_id3 = np.argmax(err_eq3)
-    x_id4 = np.argmax(err_eq4)
-    print("Adding new point:", X[x_id1], "\n")
-    data.add_anchors(X[x_id1])
-    data.add_anchors(X[x_id2])
-    data.add_anchors(X[x_id3])
-    data.add_anchors(X[x_id4])
+    err_mean = []
+    for i in range(4):
+        err_eq = np.absolute(f[i])
+        err = np.mean(err_eq)
+        print("Mean residual: %.3e" % (err))
+        err_eq = err_eq.reshape(1, 100000)
+        err_mean.append(err)
+        for x_id in ((-err_eq).argsort().reshape(100000, 1)[:100]):
+            #print("Adding new point:", X[x_id], "\n", x_id)
+            data.add_anchors(X[x_id])
+    total_err = np.mean(err_mean)
+    # err_eq1 = np.absolute(f[0])  # find each loss equation for euler equations
+    # err_eq2 = np.absolute(f[1])
+    # err_eq3 = np.absolute(f[2])
+    # err_eq4 = np.absolute(f[3])
+    # err1 = np.mean(err_eq1)
+    # err2 = np.mean(err_eq2)
+    # err3 = np.mean(err_eq3)
+    # err4 = np.mean(err_eq4)
+    # err = np.mean([err1,err2,err3,err4])
+    print("Mean total residual: %.3e" % (total_err))
+    #
+    # x_id1 = np.argmax(err_eq1)
+    # x_id2 = np.argmax(err_eq2)
+    # x_id3 = np.argmax(err_eq3)
+    # x_id4 = np.argmax(err_eq4)
+    # print("Adding new point:", X[x_id1], "\n")
+    # data.add_anchors(X[x_id1])
+    # data.add_anchors(X[x_id2])
+    # data.add_anchors(X[x_id3])
+    # data.add_anchors(X[x_id4])
     early_stopping = dde.callbacks.EarlyStopping(min_delta=1e-4, patience=2000)
     model.compile("adam", lr=1e-3)
     model.train(iterations=10000, disregard_previous_best=True, callbacks=[early_stopping])
     model.compile("L-BFGS")
     losshistory, train_state = model.train()
+    if add_iter > 4 :
+        total_err = 0.0001
 
 # X = spatial_domain.random_points(100000)
 dde.utils.save_best_state(train_state, "best_train.dat", "best_test.dat")
 dde.saveplot(losshistory, train_state, issave=True, isplot=True)
-model.save(save_path="model/adaptive_resmapling_model.ckpt")
+model.save(save_path="model/adaptive_resmapling_model_2.ckpt")

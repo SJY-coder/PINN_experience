@@ -1,2 +1,2 @@
-model_checkpoint_path: "model.ckpt-46062.ckpt"
-all_model_checkpoint_paths: "model.ckpt-46062.ckpt"
+model_checkpoint_path: "adaptive_resmapling_model.ckpt-68624.ckpt"
+all_model_checkpoint_paths: "adaptive_resmapling_model.ckpt-68624.ckpt"
